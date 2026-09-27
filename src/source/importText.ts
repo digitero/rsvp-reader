@@ -1,4 +1,5 @@
 import { detectLang, normalize, type Lang } from "../core";
+import { looksLikeAozora, stripAozora } from "./aozora";
 import { decodeText } from "./decode";
 import { markdownTitle, markdownToText } from "./markdown";
 
@@ -18,7 +19,7 @@ export class ImportError extends Error {}
 
 /** 貼り付けた文章から文書を作る。タイトルは最初の行 */
 export function fromPaste(input: string): ImportedText {
-  const text = normalize(input);
+  const text = normalize(looksLikeAozora(input) ? stripAozora(input) : input);
   if (!text) throw new ImportError("文章が空です。");
   return { title: truncate(text.split("\n", 1)[0]!), text, lang: detectLang(text), source: "paste" };
 }
@@ -34,7 +35,8 @@ export function fromFile(name: string, bytes: ArrayBuffer | Uint8Array): Importe
     throw new ImportError(`「${name}」はテキストファイルではないようです。`);
   }
   const isMd = ext === "md" || ext === "markdown";
-  const text = normalize(isMd ? markdownToText(raw) : raw);
+  const plain = isMd ? markdownToText(raw) : looksLikeAozora(raw) ? stripAozora(raw) : raw;
+  const text = normalize(plain);
   if (!text) throw new ImportError(`「${name}」には文章がありません。`);
   const base = name.replace(/\.[^.]+$/, "");
   const title = (isMd ? markdownTitle(raw) : undefined) ?? (base || text.split("\n", 1)[0]!);

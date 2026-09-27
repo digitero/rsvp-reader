@@ -1,4 +1,6 @@
 .reader {
+  --word-scale: 1;
+  --orp: var(--orp-red);
   height: 100%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -36,6 +38,19 @@
 .reader-back:focus-visible {
   outline: 2px solid var(--accent);
 }
+.bar-button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bar-button:hover {
+  background: var(--sunken);
+}
 .reader-title {
   flex: 1;
   min-width: 0;
@@ -62,7 +77,27 @@
   touch-action: pan-y;
   user-select: none;
   cursor: pointer;
-  --word-size: clamp(32px, 7vw, 56px);
+  --word-size: calc(clamp(32px, 7vw, 56px) * var(--word-scale));
+}
+
+/* 表示設定 */
+.reader[data-font="mincho"] {
+  --f-read: var(--f-mincho);
+}
+.reader[data-size="s"] {
+  --word-scale: 0.8;
+}
+.reader[data-size="l"] {
+  --word-scale: 1.25;
+}
+.reader[data-accent="blue"] {
+  --orp: var(--orp-blue);
+}
+.reader[data-accent="green"] {
+  --orp: var(--orp-green);
+}
+.reader[data-accent="none"] {
+  --orp: var(--ink);
 }
 .guide {
   position: absolute;
@@ -109,7 +144,7 @@
   text-align: right;
 }
 .word-focus {
-  color: var(--focus);
+  color: var(--orp);
   font-weight: 700;
 }
 .word-right {

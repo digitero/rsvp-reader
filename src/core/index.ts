@@ -2,6 +2,7 @@ export * from "./types";
 export { normalize } from "./normalize";
 export { detectLang } from "./detectLang";
 export { orpIndex } from "./orp";
+export { groupTokens } from "./group";
 export { indexAtOffset, nextSentenceStart, prevSentenceStart, sentenceStart } from "./sentence";
 export * from "./timing";
 export { Player, rafScheduler, type PlayerState, type Scheduler } from "./player";

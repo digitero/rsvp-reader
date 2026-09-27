@@ -11,11 +11,12 @@ interface Props {
   onAdd: (docs: ImportedText[], open: boolean) => Promise<void>;
   onOpen: (id: string) => void;
   onRemove: (id: string) => void;
+  onOpenSettings: () => void;
 }
 
 const dateFormat = new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric" });
 
-export function LibraryView({ docs, speed, onAdd, onOpen, onRemove }: Props) {
+export function LibraryView({ docs, speed, onAdd, onOpen, onRemove, onOpenSettings }: Props) {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -89,8 +90,13 @@ export function LibraryView({ docs, speed, onAdd, onOpen, onRemove }: Props) {
       }}
     >
       <header className="library-head">
-        <h1>RSVP Reader</h1>
-        <p>文章を1かたまりずつ画面中央に表示して読む</p>
+        <div>
+          <h1>RSVP Reader</h1>
+          <p>文章を1かたまりずつ画面中央に表示して読む</p>
+        </div>
+        <button type="button" className="btn-ghost" onClick={onOpenSettings}>
+          表示設定
+        </button>
       </header>
 
       <form

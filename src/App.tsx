@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Lang } from "./core";
 import { LibraryView } from "./features/library/LibraryView";
 import { Reader } from "./features/reader/Reader";
+import { SettingsSheet } from "./features/settings/SettingsSheet";
 import type { ImportedText } from "./source/importText";
 import { Library, type DocMeta } from "./storage/library";
 import { loadSettings, saveSettings, type Settings } from "./storage/settings";
@@ -18,6 +19,8 @@ export function App() {
   const [state, setState] = useState<LibraryState>({ status: "loading" });
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [route, navigate] = useHashRoute();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [readingLang, setReadingLang] = useState<Lang | null>(null);
 
   useEffect(() => {
     let lib: Library | undefined;
@@ -40,6 +43,17 @@ export function App() {
   }, []);
 
   useEffect(() => saveSettings(settings), [settings]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (settings.theme === "auto") delete root.dataset.theme;
+    else root.dataset.theme = settings.theme;
+  }, [settings.theme]);
+
+  // 画面を移ったら設定シートは閉じる
+  useEffect(() => setSettingsOpen(false), [route]);
+  const openSettings = useCallback(() => setSettingsOpen(true), []);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
 
   // ライブラリ以外（リーダー画面）にファイルを落としても、ブラウザがそのファイルに移動しないようにする
   useEffect(() => {
@@ -95,28 +109,47 @@ export function App() {
     );
   }
 
+  const sheet = settingsOpen && (
+    <SettingsSheet
+      settings={settings}
+      lang={route.name === "read" ? (readingLang ?? "ja") : "ja"}
+      onChange={setSettings}
+      onClose={closeSettings}
+    />
+  );
+
   if (route.name === "read") {
     return (
-      <ReaderRoute
-        key={route.id}
-        lib={state.lib}
-        id={route.id}
-        settings={settings}
-        onSpeedChange={onSpeedChange}
-        onSaved={refresh}
-        onClose={() => navigate({ name: "library" })}
-      />
+      <>
+        <ReaderRoute
+          key={route.id}
+          lib={state.lib}
+          id={route.id}
+          settings={settings}
+          settingsOpen={settingsOpen}
+          onOpenSettings={openSettings}
+          onLang={setReadingLang}
+          onSpeedChange={onSpeedChange}
+          onSaved={refresh}
+          onClose={() => navigate({ name: "library" })}
+        />
+        {sheet}
+      </>
     );
   }
 
   return (
-    <LibraryView
-      docs={state.docs}
-      speed={settings.speed}
-      onAdd={onAdd}
-      onOpen={(id) => navigate({ name: "read", id })}
-      onRemove={(id) => void onRemove(id)}
-    />
+    <>
+      <LibraryView
+        docs={state.docs}
+        speed={settings.speed}
+        onAdd={onAdd}
+        onOpen={(id) => navigate({ name: "read", id })}
+        onRemove={(id) => void onRemove(id)}
+        onOpenSettings={openSettings}
+      />
+      {sheet}
+    </>
   );
 }
 
@@ -124,12 +157,16 @@ interface ReaderRouteProps {
   lib: Library;
   id: string;
   settings: Settings;
+  settingsOpen: boolean;
+  onOpenSettings: () => void;
+  onLang: (lang: Lang) => void;
   onSpeedChange: (lang: Lang, speed: number) => void;
   onSaved: () => void;
   onClose: () => void;
 }
 
-function ReaderRoute({ lib, id, settings, onSpeedChange, onSaved, onClose }: ReaderRouteProps) {
+function ReaderRoute(props: ReaderRouteProps) {
+  const { lib, id, settings, onSpeedChange, onSaved, onClose, onLang } = props;
   const [doc, setDoc] = useState<{ meta: DocMeta; text: string } | null | undefined>(undefined);
 
   useEffect(() => {
@@ -143,6 +180,7 @@ function ReaderRoute({ lib, id, settings, onSpeedChange, onSaved, onClose }: Rea
   }, [lib, id]);
 
   const lang = doc?.meta.lang ?? "ja";
+  useEffect(() => onLang(lang), [lang, onLang]);
   const onSpeed = useCallback((speed: number) => onSpeedChange(lang, speed), [onSpeedChange, lang]);
   const onProgress = useCallback(
     (offset: number, finished: boolean) => {
@@ -174,6 +212,9 @@ function ReaderRoute({ lib, id, settings, onSpeedChange, onSaved, onClose }: Rea
       initialOffset={doc.meta.finished ? 0 : doc.meta.offset}
       onProgress={onProgress}
       onClose={onClose}
+      display={settings}
+      settingsOpen={props.settingsOpen}
+      onOpenSettings={props.onOpenSettings}
     />
   );
 }

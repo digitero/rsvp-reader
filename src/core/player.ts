@@ -101,10 +101,17 @@ export class Player {
     this.timing = timing;
   }
 
-  setTokens(tokens: readonly Token[]): void {
+  /**
+   * トークン列を差し替える（表示単位の変更など）。同じ本文なら、いま表示している位置を保つ。
+   * 再生中なら止める。
+   */
+  setTokens(tokens: readonly Token[], keepPosition = true): void {
+    if (tokens === this.tokens) return;
+    const offset = this.currentOffset();
     this.stopLoop();
     this.tokens = tokens;
-    this.update({ index: 0, playing: false, finished: false });
+    const index = keepPosition && tokens.length > 0 ? indexAtOffset(tokens, offset) : 0;
+    this.update({ index, playing: false, finished: false });
   }
 
   /** 現在のトークンの原文オフセット（保存用） */

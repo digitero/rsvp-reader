@@ -11,10 +11,11 @@ export interface ReaderKeyHandlers {
 
 /**
  * Space: 再生/停止、←→: 一文戻る/進む、↑↓: 速度、Esc: 閉じる。
- * 文字入力中や、フォーカスしたスライダー・ボタンが自分で処理するキーには反応しない。
+ * 文字入力中や、フォーカスしたスライダーが自分で処理する矢印キーには反応しない。
  */
-export function useReaderKeys(handlers: ReaderKeyHandlers): void {
+export function useReaderKeys(handlers: ReaderKeyHandlers, enabled = true): void {
   useEffect(() => {
+    if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
@@ -22,13 +23,13 @@ export function useReaderKeys(handlers: ReaderKeyHandlers): void {
       if (tag === "TEXTAREA" || el?.isContentEditable) return;
       if (tag === "INPUT" && (el as HTMLInputElement).type !== "range") return;
       const onRange = tag === "INPUT";
-      const onButton = tag === "BUTTON";
 
       switch (e.key) {
         case " ":
-          if (onButton) return; // ボタン自身の Space クリックと二重にならないように
+          // フォーカスがボタンにあっても Space は常に再生/停止。
+          // preventDefault でボタン自身のクリック（設定を開き直す・もう一文戻るなど）を起こさない
           e.preventDefault();
-          handlers.toggle();
+          if (!e.repeat) handlers.toggle();
           break;
         case "ArrowLeft":
           if (onRange) return;
@@ -55,7 +56,16 @@ export function useReaderKeys(handlers: ReaderKeyHandlers): void {
           break;
       }
     };
+    // ボタンは Space の keyup でクリックされるので、そちらも止める
+    const onKeyUp = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (e.key === " " && tag === "BUTTON") e.preventDefault();
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [handlers]);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [handlers, enabled]);
 }

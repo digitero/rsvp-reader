@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, type PointerEvent, type ReactNode } from "r
 import {
   cumulativeMs,
   DEFAULT_CHUNK_MAX,
+  groupTokens,
   IntlSegmenter,
   SPEED_RANGE,
   type Lang,
   type TimingOptions,
 } from "../../core";
+import type { Settings } from "../../storage/settings";
 import { ContextView } from "./ContextView";
 import { Controls } from "./Controls";
 import { usePlayer } from "./usePlayer";
@@ -17,6 +19,8 @@ import "./reader.css";
 const segmenter = new IntlSegmenter();
 /** これ以上横に動かしたら、タップではなく左右スワイプとみなす */
 const SWIPE_PX = 48;
+/** 2文節（2語）まとめで、これより長くなるならまとめない */
+const GROUP_MAX_LENGTH: Record<Lang, number> = { ja: 10, en: 18 };
 /** 再生中に読書位置を保存する間隔 */
 const SAVE_INTERVAL_MS = 5000;
 
@@ -32,28 +36,64 @@ export interface ReaderProps {
   /** 停止・読了・画面を離れたとき、および再生中は一定間隔で読書位置を通知する */
   onProgress?: (offset: number, finished: boolean) => void;
   onClose?: () => void;
+  /** 表示単位・書体・文字サイズ・強調色・句読点での停止 */
+  display: Pick<Settings, "group" | "font" | "size" | "accent" | "pause">;
+  /** 表示設定シートが開いている間は再生を止め、キー操作を受け付けない */
+  settingsOpen?: boolean;
+  onOpenSettings?: () => void;
   /** 上部バーの右側に置く操作 */
   actions?: ReactNode;
 }
 
 export function Reader(props: ReaderProps) {
-  const { text, lang, speed, onSpeedChange, onProgress, onClose } = props;
-  const tokens = useMemo(
+  const { text, lang, speed, onSpeedChange, onProgress, onClose, display, settingsOpen = false } = props;
+  const baseTokens = useMemo(
     () => segmenter.segmentSync(text, lang, { chunkMax: DEFAULT_CHUNK_MAX }),
     [text, lang],
   );
-  const timing = useMemo<TimingOptions>(() => ({ lang, speed }), [lang, speed]);
+  const tokens = useMemo(
+    () => groupTokens(baseTokens, text, display.group, GROUP_MAX_LENGTH[lang]),
+    [baseTokens, text, display.group, lang],
+  );
+  const timing = useMemo<TimingOptions>(
+    () => ({ lang, speed, pauseScale: display.pause }),
+    [lang, speed, display.pause],
+  );
   const timeline = useMemo(() => cumulativeMs(tokens, timing), [tokens, timing]);
   const [player, state] = usePlayer(tokens, timing);
 
+  // 開いたときに一度だけ保存位置へ移動する。表示単位を変えたときの位置は Player が保つ
   useEffect(() => {
-    // 本文が変わったときだけ保存位置へ移動する（initialOffset の更新では動かさない）
     if (props.initialOffset) player.seekToOffset(props.initialOffset);
-  }, [player, tokens]);
+  }, [player]);
+
+  useEffect(() => {
+    if (settingsOpen) player.pause();
+  }, [settingsOpen, player]);
+
+  // 再生中は画面が消えないようにする（対応していない環境では何もしない）
+  useEffect(() => {
+    if (!state.playing || !("wakeLock" in navigator)) return;
+    let sentinel: WakeLockSentinel | null = null;
+    let released = false;
+    navigator.wakeLock
+      .request("screen")
+      .then((s) => {
+        if (released) void s.release();
+        else sentinel = s;
+      })
+      .catch(() => {});
+    return () => {
+      released = true;
+      void sentinel?.release();
+    };
+  }, [state.playing]);
 
   // 読書位置の保存。最新の onProgress を ref 経由で呼び、購読を張り直さない
   const progressRef = useRef(onProgress);
   progressRef.current = onProgress;
+  const tokensRef = useRef(tokens);
+  tokensRef.current = tokens;
   useEffect(() => {
     const report = () => {
       const { finished } = player.getState();
@@ -66,7 +106,14 @@ export function Reader(props: ReaderProps) {
       if (touched) report();
     };
     let wasPlaying = player.getState().playing;
+    let lastTokens = tokensRef.current;
     const unsubscribe = player.subscribe((s) => {
+      // 表示単位の変更によるトークン列の差し替えは、読んだことに数えない
+      if (tokensRef.current !== lastTokens) {
+        lastTokens = tokensRef.current;
+        wasPlaying = s.playing;
+        return;
+      }
       touched = true;
       if (wasPlaying && !s.playing) report();
       wasPlaying = s.playing;
@@ -106,7 +153,7 @@ export function Reader(props: ReaderProps) {
     }),
     [player, speed, range, onSpeedChange, onClose],
   );
-  useReaderKeys(keyHandlers);
+  useReaderKeys(keyHandlers, !settingsOpen);
 
   const pointerStart = useRef<{ x: number; y: number } | null>(null);
   const onPointerDown = (e: PointerEvent) => {
@@ -115,7 +162,7 @@ export function Reader(props: ReaderProps) {
   const onPointerUp = (e: PointerEvent) => {
     const start = pointerStart.current;
     pointerStart.current = null;
-    if (!start) return;
+    if (!start || settingsOpen) return;
     const dx = e.clientX - start.x;
     const dy = e.clientY - start.y;
     // マウスのドラッグは文脈表示での文字選択に使うので、スワイプはタッチとペンだけ
@@ -130,10 +177,16 @@ export function Reader(props: ReaderProps) {
 
   const total = timeline[tokens.length] ?? 0;
   const remaining = total - (timeline[state.index] ?? 0);
-  const showContext = !state.playing && tokens.length > 0;
+  // 設定中は文脈表示を隠し、書体や強調色の変化を表示語で確かめられるようにする
+  const showContext = !state.playing && !settingsOpen && tokens.length > 0;
 
   return (
-    <div className="reader">
+    <div
+      className="reader"
+      data-font={display.font}
+      data-size={display.size}
+      data-accent={display.accent}
+    >
       <header className="reader-bar">
         {onClose && (
           <button type="button" className="reader-back" onClick={onClose} title="ライブラリに戻る (Esc)">
@@ -144,6 +197,11 @@ export function Reader(props: ReaderProps) {
         <span className="reader-meta">
           {lang} · {tokens.length.toLocaleString()} 語
         </span>
+        {props.onOpenSettings && (
+          <button type="button" className="bar-button" onClick={props.onOpenSettings}>
+            表示設定
+          </button>
+        )}
         {props.actions}
       </header>
 

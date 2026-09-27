@@ -95,6 +95,15 @@ describe("Player", () => {
     expect(fast).toBeGreaterThan(3);
   });
 
+  it("トークン列を差し替えても表示位置を保つ", () => {
+    player.seek(5); // start 10
+    const merged: Token[] = [0, 4, 8, 12, 16].map((start) => ({ start, end: start + 4, orp: 1, pause: 0, weight: 1 }));
+    player.setTokens(merged);
+    expect(player.getState()).toMatchObject({ index: 2, playing: false });
+    player.setTokens(tokens, false);
+    expect(player.getState().index).toBe(0);
+  });
+
   it("空のトークン列では再生しない", () => {
     const empty = new Player([], timing, clock);
     empty.play();

@@ -1,0 +1,157 @@
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--overlay);
+}
+/* 表示語のプレビューが隠れないよう、画面の下半分までに収める */
+.sheet {
+  width: min(560px, 100%);
+  max-height: 50%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  gap: 10px;
+  padding: 16px 20px calc(env(safe-area-inset-bottom, 0px) + 20px);
+  border-radius: 14px 14px 0 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  box-shadow: 0 -8px 30px rgb(0 0 0 / 0.12);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sheet {
+    animation: sheet-in 160ms ease-out;
+  }
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0.6;
+  }
+}
+/* 広い画面では右側のパネルにして、中央の表示語と重ならないようにする */
+@media (min-width: 1000px) {
+  .sheet-backdrop {
+    align-items: stretch;
+    justify-content: flex-end;
+    background: transparent;
+  }
+  .sheet {
+    width: 360px;
+    max-height: none;
+    align-content: start;
+    border-radius: 0;
+    border: 0;
+    border-left: 1px solid var(--line);
+    box-shadow: -8px 0 30px rgb(0 0 0 / 0.12);
+    padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
+  }
+  .setting-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sheet-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.setting-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+.setting-label {
+  color: var(--muted);
+}
+.setting-speed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.setting-speed input {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+.setting-speed output {
+  min-width: 76px;
+  font-family: var(--f-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  width: max-content;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.segmented label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+  cursor: pointer;
+  border-right: 1px solid var(--line);
+}
+.segmented label:last-child {
+  border-right: 0;
+}
+.segmented label.is-on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
+}
+.segmented input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.segmented label:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+.swatch-red {
+  background: var(--orp-red);
+}
+.swatch-blue {
+  background: var(--orp-blue);
+}
+.swatch-green {
+  background: var(--orp-green);
+}
+.swatch-none {
+  background: var(--ink);
+}
+
+@media (max-width: 420px) {
+  .setting-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}

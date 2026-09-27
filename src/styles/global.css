@@ -13,16 +13,25 @@
   --accent-soft: #e3e8f8;
   --danger: #b4232a;
   --error: #b4232a;
+  --overlay: rgb(22 26 34 / 0.35);
+
+  /* 強調色の選択肢（テーマごとに見やすい値を定義する） */
+  --orp-red: #d93a2b;
+  --orp-blue: #2f5bd0;
+  --orp-green: #1b7f4f;
 
   --f-body: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
-  --f-read: "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+  --f-gothic: "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+  --f-mincho: "BIZ UDPMincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --f-read: var(--f-gothic);
   --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
 
   color-scheme: light;
 }
 
+/* ダーク: OS 設定に従う場合と、明示的に選んだ場合の両方 */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]):not([data-theme="sepia"]) {
     --bg: #101318;
     --surface: #171b22;
     --sunken: #1e232c;
@@ -37,8 +46,56 @@
     --accent-soft: #232c4a;
     --danger: #c9363d;
     --error: #ff7b72;
+    --overlay: rgb(0 0 0 / 0.55);
+    --orp-red: #ff6b5a;
+    --orp-blue: #7fa2ff;
+    --orp-green: #4fd08e;
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #101318;
+  --surface: #171b22;
+  --sunken: #1e232c;
+  --screen: #0c0f13;
+  --ink: #e6e9ef;
+  --muted: #a0a8b7;
+  --faint: #737c8c;
+  --line: #2a303b;
+  --guide: #39414f;
+  --focus: #ff6b5a;
+  --accent: #8fa3f2;
+  --accent-soft: #232c4a;
+  --danger: #c9363d;
+  --error: #ff7b72;
+  --overlay: rgb(0 0 0 / 0.55);
+  --orp-red: #ff6b5a;
+  --orp-blue: #7fa2ff;
+  --orp-green: #4fd08e;
+  color-scheme: dark;
+}
+
+/* セピア: 紙に近い、長時間でも眩しくない配色 */
+:root[data-theme="sepia"] {
+  --bg: #ece3d0;
+  --surface: #f8f1e3;
+  --sunken: #e6dbc4;
+  --screen: #f4ecdb;
+  --ink: #3b2f22;
+  --muted: #6e5d49;
+  --faint: #93806a;
+  --line: #d9ccb2;
+  --guide: #cbbb9c;
+  --focus: #b8412c;
+  --accent: #7a4f1f;
+  --accent-soft: #eadcc0;
+  --danger: #a3261c;
+  --error: #a3261c;
+  --overlay: rgb(59 47 34 / 0.35);
+  --orp-red: #b8412c;
+  --orp-blue: #2d5a9a;
+  --orp-green: #3f7a3a;
+  color-scheme: light;
 }
 
 *,

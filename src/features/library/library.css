@@ -11,6 +11,12 @@
   width: min(720px, 100%);
 }
 
+.library-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
 .library-head h1 {
   margin: 0;
   font-size: 22px;
