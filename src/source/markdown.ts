@@ -2,7 +2,9 @@
  * Markdown を読むための平文にする。完全なパーサではなく、読書の邪魔になる記号を落とす程度。
  * 見出し・段落・リストの区切りは改行として残す。
  */
-export function markdownToText(md: string): string {
+import { markHeading } from "./headings";
+
+export function markdownToText(md: string, options: { markHeadings?: boolean } = {}): string {
   const lines: string[] = [];
   let inFence = false;
   let inFrontMatter = false;
@@ -30,6 +32,7 @@ export function markdownToText(md: string): string {
     }
     if (/^\s*\|?\s*:?-{3,}/.test(raw) && raw.includes("|")) return; // 表の区切り行
 
+    const headingLevel = /^\s{0,3}(#{1,6})\s+/.exec(raw)?.[1]?.length;
     let line = raw
       .replace(/^\s{0,3}#{1,6}\s+/, "") // 見出し
       .replace(/\s+#+\s*$/, "")
@@ -48,7 +51,7 @@ export function markdownToText(md: string): string {
     if (line.includes("|") && /^\s*\|.*\|\s*$/.test(line)) {
       line = line.split("|").map((c) => c.trim()).filter(Boolean).join("、");
     }
-    lines.push(line);
+    lines.push(options.markHeadings && headingLevel ? markHeading(line, headingLevel) : line);
   });
 
   return lines.join("\n");

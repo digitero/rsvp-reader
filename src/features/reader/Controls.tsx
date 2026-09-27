@@ -13,6 +13,8 @@ interface Props {
   onNext: () => void;
   onSeek: (index: number) => void;
   onSpeed: (speed: number) => void;
+  /** いま読んでいる章の見出し */
+  chapter?: string;
 }
 
 export function Controls(p: Props) {
@@ -35,7 +37,10 @@ export function Controls(p: Props) {
         style={{ "--p": `${percent}%` } as CSSProperties}
       />
       <div className="status">
-        <span>{percent}%</span>
+        <span className="status-chapter">
+          {p.chapter ? `${p.chapter} · ` : ""}
+          {percent}%
+        </span>
         <span>残り {formatDuration(p.remainingMs)}</span>
       </div>
       <div className="buttons">

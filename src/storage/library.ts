@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { Lang } from "../core";
+import type { Heading } from "../source/headings";
 import type { ImportedText, SourceKind } from "../source/importText";
 
 /** ライブラリ一覧に出す情報。本文は大きいので別のストアに置く */
@@ -17,6 +18,8 @@ export interface DocMeta {
   /** 読書位置（本文の文字オフセット） */
   offset: number;
   finished: boolean;
+  /** 目次。M5 より前に追加した文書には無い */
+  headings?: Heading[];
 }
 
 interface Schema extends DBSchema {
@@ -64,6 +67,7 @@ export class Library {
       unitCount: countUnits(doc.text, doc.lang),
       offset: 0,
       finished: false,
+      headings: doc.headings,
     };
     const tx = this.db.transaction(["docs", "texts"], "readwrite");
     await Promise.all([tx.objectStore("docs").put(meta), tx.objectStore("texts").put(doc.text, meta.id), tx.done]);

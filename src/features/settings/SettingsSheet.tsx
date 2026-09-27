@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import { SPEED_RANGE, type Lang } from "../../core";
 import type { Settings } from "../../storage/settings";
+import "../../styles/sheet.css";
 import "./settings.css";
 
 interface Props {

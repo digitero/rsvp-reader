@@ -14,6 +14,9 @@ const OPENING = /^[「『（(［\[〔【“‘]+$/;
 const NUMERIC_END = /[0-9０-９]$/;
 /** 数字の直後の助数詞（年・月・倍・人 など） */
 const COUNTER = /^[一-鿿]{1,2}$/;
+/** 「第」とその後の数字（漢数字を含む）。「第2章」「第十一話」を1かたまりにする */
+const ORDINAL_OPEN = /^第[0-9０-９一二三四五六七八九十百千〇]*$/;
+const ORDINAL_PART = /^(?:[0-9０-９一二三四五六七八九十百千〇]+|[章節話部回編幕巻条項])$/;
 const WHITESPACE = /^\s+$/;
 const HAS_ALNUM = /[A-Za-z0-9]/;
 const HAS_NON_ASCII = /[^\x00-\x7F]/;
@@ -144,6 +147,7 @@ function fits(cur: Span, s: string, end: number, chunkMax: number): boolean {
 function joinsPrevious(para: Piece, cur: Span, s: string): boolean {
   if (HIRAGANA.test(s)) return !STANDALONE.has(s);
   const prev = para.text.slice(cur.start - para.index, cur.end - para.index);
+  if (ORDINAL_OPEN.test(prev) && ORDINAL_PART.test(s)) return true;
   return NUMERIC_END.test(prev) && COUNTER.test(s);
 }
 

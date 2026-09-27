@@ -1,6 +1,7 @@
 import { detectLang, normalize, type Lang } from "../core";
 import { looksLikeAozora, stripAozora } from "./aozora";
 import { decodeText } from "./decode";
+import { extractHeadings, markPlainHeadings, type Heading } from "./headings";
 import { markdownTitle, markdownToText } from "./markdown";
 
 export type SourceKind = "paste" | "txt" | "md";
@@ -10,6 +11,8 @@ export interface ImportedText {
   text: string;
   lang: Lang;
   source: SourceKind;
+  /** 目次。見出しが見つからなければ空 */
+  headings: Heading[];
 }
 
 export const ACCEPTED_FILES = ".txt,.md,.markdown,.text,text/plain,text/markdown";
@@ -19,9 +22,9 @@ export class ImportError extends Error {}
 
 /** 貼り付けた文章から文書を作る。タイトルは最初の行 */
 export function fromPaste(input: string): ImportedText {
-  const text = normalize(looksLikeAozora(input) ? stripAozora(input) : input);
+  const { text, headings } = toPlain(input, false);
   if (!text) throw new ImportError("文章が空です。");
-  return { title: truncate(text.split("\n", 1)[0]!), text, lang: detectLang(text), source: "paste" };
+  return { title: truncate(text.split("\n", 1)[0]!), text, lang: detectLang(text), source: "paste", headings };
 }
 
 /** ファイル名とバイト列から文書を作る。Markdown は記号を落として最初の見出しをタイトルにする */
@@ -35,12 +38,21 @@ export function fromFile(name: string, bytes: ArrayBuffer | Uint8Array): Importe
     throw new ImportError(`「${name}」はテキストファイルではないようです。`);
   }
   const isMd = ext === "md" || ext === "markdown";
-  const plain = isMd ? markdownToText(raw) : looksLikeAozora(raw) ? stripAozora(raw) : raw;
-  const text = normalize(plain);
+  const { text, headings } = toPlain(raw, isMd);
   if (!text) throw new ImportError(`「${name}」には文章がありません。`);
   const base = name.replace(/\.[^.]+$/, "");
   const title = (isMd ? markdownTitle(raw) : undefined) ?? (base || text.split("\n", 1)[0]!);
-  return { title: truncate(title), text, lang: detectLang(text), source: isMd ? "md" : "txt" };
+  return { title: truncate(title), text, lang: detectLang(text), source: isMd ? "md" : "txt", headings };
+}
+
+/** 記法を取り除いて正規化し、見出しの位置を拾う */
+function toPlain(raw: string, isMd: boolean): { text: string; headings: Heading[] } {
+  const marked = isMd
+    ? markdownToText(raw, { markHeadings: true })
+    : looksLikeAozora(raw)
+      ? stripAozora(raw, { markHeadings: true })
+      : markPlainHeadings(raw);
+  return extractHeadings(normalize(marked));
 }
 
 function truncate(s: string): string {

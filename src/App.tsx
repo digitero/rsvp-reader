@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Lang } from "./core";
+import { DEFAULT_CHUNK_MAX, type Lang, type Token } from "./core";
+import { segmentAsync } from "./core/segmenter/segmentAsync";
 import { LibraryView } from "./features/library/LibraryView";
 import { Reader } from "./features/reader/Reader";
 import { SettingsSheet } from "./features/settings/SettingsSheet";
@@ -167,13 +168,20 @@ interface ReaderRouteProps {
 
 function ReaderRoute(props: ReaderRouteProps) {
   const { lib, id, settings, onSpeedChange, onSaved, onClose, onLang } = props;
-  const [doc, setDoc] = useState<{ meta: DocMeta; text: string } | null | undefined>(undefined);
+  const [doc, setDoc] = useState<{ meta: DocMeta; text: string; tokens: Token[] } | null | undefined>(undefined);
 
+  // 本文を読み出して分割する。長文は Worker で分割するので、その間は準備中を表示する
   useEffect(() => {
     let cancelled = false;
-    void lib.get(id).then((d) => {
-      if (!cancelled) setDoc(d ?? null);
-    });
+    void (async () => {
+      const d = await lib.get(id);
+      if (!d) {
+        if (!cancelled) setDoc(null);
+        return;
+      }
+      const tokens = await segmentAsync(d.text, d.meta.lang, DEFAULT_CHUNK_MAX);
+      if (!cancelled) setDoc({ ...d, tokens });
+    })();
     return () => {
       cancelled = true;
     };
@@ -190,7 +198,7 @@ function ReaderRoute(props: ReaderRouteProps) {
     [lib, id, onSaved],
   );
 
-  if (doc === undefined) return null;
+  if (doc === undefined) return <p className="app-message">準備しています…</p>;
   if (doc === null) {
     return (
       <div className="app-message">
@@ -207,6 +215,8 @@ function ReaderRoute(props: ReaderRouteProps) {
       title={doc.meta.title}
       text={doc.text}
       lang={doc.meta.lang}
+      baseTokens={doc.tokens}
+      headings={doc.meta.headings}
       speed={settings.speed[doc.meta.lang]}
       onSpeedChange={onSpeed}
       initialOffset={doc.meta.finished ? 0 : doc.meta.offset}

@@ -72,7 +72,13 @@ describe("decodeText", () => {
 describe("import", () => {
   it("fromPaste は最初の行をタイトルに、言語を判定する", () => {
     const doc = fromPaste("\r\n  最初の行です。\r\n\r\n本文。");
-    expect(doc).toEqual({ title: "最初の行です。", text: "最初の行です。\n\n本文。", lang: "ja", source: "paste" });
+    expect(doc).toEqual({
+      title: "最初の行です。",
+      text: "最初の行です。\n\n本文。",
+      lang: "ja",
+      source: "paste",
+      headings: [],
+    });
   });
 
   it("fromPaste は長いタイトルを切り詰める", () => {

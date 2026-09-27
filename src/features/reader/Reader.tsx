@@ -1,22 +1,23 @@
-import { useEffect, useMemo, useRef, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import {
   cumulativeMs,
-  DEFAULT_CHUNK_MAX,
   groupTokens,
-  IntlSegmenter,
+  indexAtOffset,
   SPEED_RANGE,
   type Lang,
   type TimingOptions,
+  type Token,
 } from "../../core";
+import type { Heading } from "../../source/headings";
 import type { Settings } from "../../storage/settings";
 import { ContextView } from "./ContextView";
 import { Controls } from "./Controls";
 import { usePlayer } from "./usePlayer";
+import { TocSheet } from "./TocSheet";
 import { useReaderKeys } from "./useReaderKeys";
 import { WordDisplay } from "./WordDisplay";
 import "./reader.css";
 
-const segmenter = new IntlSegmenter();
 /** これ以上横に動かしたら、タップではなく左右スワイプとみなす */
 const SWIPE_PX = 48;
 /** 2文節（2語）まとめで、これより長くなるならまとめない */
@@ -29,6 +30,10 @@ export interface ReaderProps {
   /** normalize 済みの本文 */
   text: string;
   lang: Lang;
+  /** 本文を分割したトークン（表示単位でまとめる前） */
+  baseTokens: readonly Token[];
+  /** 目次。空なら目次ボタンを出さない */
+  headings?: readonly Heading[];
   speed: number;
   onSpeedChange: (speed: number) => void;
   /** 保存しておいた読書位置（文字オフセット） */
@@ -46,11 +51,12 @@ export interface ReaderProps {
 }
 
 export function Reader(props: ReaderProps) {
-  const { text, lang, speed, onSpeedChange, onProgress, onClose, display, settingsOpen = false } = props;
-  const baseTokens = useMemo(
-    () => segmenter.segmentSync(text, lang, { chunkMax: DEFAULT_CHUNK_MAX }),
-    [text, lang],
-  );
+  const { text, lang, speed, onSpeedChange, onProgress, onClose, display, baseTokens } = props;
+  const headings = props.headings ?? [];
+  const [tocOpen, setTocOpen] = useState(false);
+  // 設定や目次のシートが開いている間は、再生を止めてリーダーのキー操作を受け付けない
+  const settingsOpen = props.settingsOpen ?? false;
+  const sheetOpen = settingsOpen || tocOpen;
   const tokens = useMemo(
     () => groupTokens(baseTokens, text, display.group, GROUP_MAX_LENGTH[lang]),
     [baseTokens, text, display.group, lang],
@@ -68,8 +74,13 @@ export function Reader(props: ReaderProps) {
   }, [player]);
 
   useEffect(() => {
-    if (settingsOpen) player.pause();
-  }, [settingsOpen, player]);
+    if (sheetOpen) player.pause();
+  }, [sheetOpen, player]);
+
+  const closeToc = useCallback(() => setTocOpen(false), []);
+  const currentOffset = tokens[state.index]?.start ?? 0;
+  let chapter = -1;
+  for (let i = 0; i < headings.length && headings[i]!.offset <= currentOffset; i++) chapter = i;
 
   // 再生中は画面が消えないようにする（対応していない環境では何もしない）
   useEffect(() => {
@@ -153,7 +164,7 @@ export function Reader(props: ReaderProps) {
     }),
     [player, speed, range, onSpeedChange, onClose],
   );
-  useReaderKeys(keyHandlers, !settingsOpen);
+  useReaderKeys(keyHandlers, !sheetOpen);
 
   const pointerStart = useRef<{ x: number; y: number } | null>(null);
   const onPointerDown = (e: PointerEvent) => {
@@ -162,7 +173,7 @@ export function Reader(props: ReaderProps) {
   const onPointerUp = (e: PointerEvent) => {
     const start = pointerStart.current;
     pointerStart.current = null;
-    if (!start || settingsOpen) return;
+    if (!start || sheetOpen) return;
     const dx = e.clientX - start.x;
     const dy = e.clientY - start.y;
     // マウスのドラッグは文脈表示での文字選択に使うので、スワイプはタッチとペンだけ
@@ -178,7 +189,7 @@ export function Reader(props: ReaderProps) {
   const total = timeline[tokens.length] ?? 0;
   const remaining = total - (timeline[state.index] ?? 0);
   // 設定中は文脈表示を隠し、書体や強調色の変化を表示語で確かめられるようにする
-  const showContext = !state.playing && !settingsOpen && tokens.length > 0;
+  const showContext = !state.playing && !sheetOpen && tokens.length > 0;
 
   return (
     <div
@@ -197,6 +208,11 @@ export function Reader(props: ReaderProps) {
         <span className="reader-meta">
           {lang} · {tokens.length.toLocaleString()} 語
         </span>
+        {headings.length > 0 && (
+          <button type="button" className="bar-button" onClick={() => setTocOpen(true)}>
+            目次
+          </button>
+        )}
         {props.onOpenSettings && (
           <button type="button" className="bar-button" onClick={props.onOpenSettings}>
             表示設定
@@ -241,7 +257,19 @@ export function Reader(props: ReaderProps) {
         onNext={() => player.nextSentence()}
         onSeek={(i) => player.seek(i)}
         onSpeed={setSpeed}
+        chapter={chapter >= 0 ? headings[chapter]!.title : undefined}
       />
+      {tocOpen && (
+        <TocSheet
+          headings={headings}
+          current={chapter}
+          onPick={(h) => {
+            player.seek(indexAtOffset(tokens, h.offset));
+            setTocOpen(false);
+          }}
+          onClose={closeToc}
+        />
+      )}
     </div>
   );
 }

@@ -9,12 +9,19 @@ beforeEach(async () => {
 });
 afterEach(() => lib.close());
 
-const doc = (title: string, text = "吾輩は猫である。") => ({ title, text, lang: "ja" as const, source: "paste" as const });
+const doc = (title: string, text = "吾輩は猫である。") => ({
+  title,
+  text,
+  lang: "ja" as const,
+  source: "paste" as const,
+  headings: [{ offset: 0, title, level: 1 }],
+});
 
 describe("Library", () => {
   it("追加した文書の本文とメタ情報を取り出せる", async () => {
     const meta = await lib.add(doc("猫", "吾輩は 猫である。"), 1000);
     expect(meta).toMatchObject({ title: "猫", charCount: 9, unitCount: 8, offset: 0, finished: false, lastReadAt: null });
+    expect(meta.headings).toEqual([{ offset: 0, title: "猫", level: 1 }]);
     expect(await lib.get(meta.id)).toEqual({ meta, text: "吾輩は 猫である。" });
   });
 

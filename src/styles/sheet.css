@@ -1,0 +1,65 @@
+/* 設定・目次などの下から出るシート（広い画面では右側のパネル） */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--overlay);
+}
+/* 表示語のプレビューが隠れないよう、画面の下半分までに収める */
+.sheet {
+  width: min(560px, 100%);
+  max-height: 50%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  gap: 10px;
+  padding: 16px 20px calc(env(safe-area-inset-bottom, 0px) + 20px);
+  border-radius: 14px 14px 0 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  box-shadow: 0 -8px 30px rgb(0 0 0 / 0.12);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sheet {
+    animation: sheet-in 160ms ease-out;
+  }
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0.6;
+  }
+}
+/* 広い画面では右側のパネルにして、中央の表示語と重ならないようにする */
+@media (min-width: 1000px) {
+  .sheet-backdrop {
+    align-items: stretch;
+    justify-content: flex-end;
+    background: transparent;
+  }
+  .sheet {
+    width: 360px;
+    max-height: none;
+    align-content: start;
+    border-radius: 0;
+    border: 0;
+    border-left: 1px solid var(--line);
+    box-shadow: -8px 0 30px rgb(0 0 0 / 0.12);
+    padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
+  }
+  
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sheet-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
