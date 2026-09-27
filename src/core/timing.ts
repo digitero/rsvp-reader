@@ -34,6 +34,16 @@ export function tokenDelay(token: Token, opts: TimingOptions, rampLeft = 0): num
   return Math.max((base + pause) * token.weight * ramp, MIN_DELAY_MS);
 }
 
+/**
+ * 各トークンの表示開始時刻(ms)の累積。長さは tokens.length + 1 で、最後の要素が合計。
+ * 残り時間を毎回ループで数えずに `total - cumulative[i]` で出すために使う。
+ */
+export function cumulativeMs(tokens: readonly Token[], opts: TimingOptions): Float64Array {
+  const acc = new Float64Array(tokens.length + 1);
+  for (let i = 0; i < tokens.length; i++) acc[i + 1] = acc[i]! + tokenDelay(tokens[i]!, opts);
+  return acc;
+}
+
 /** `from` から最後までの表示時間の合計(ms)。ランプアップは含めない */
 export function remainingMs(tokens: readonly Token[], from: number, opts: TimingOptions): number {
   let ms = 0;

@@ -1,0 +1,70 @@
+.bar-button {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bar-button:hover {
+  background: var(--sunken);
+}
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--ink) 35%, transparent);
+}
+.sheet {
+  width: min(640px, 100%);
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.sheet-title {
+  font-weight: 700;
+}
+.sheet textarea {
+  min-height: 220px;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--screen);
+  font-family: var(--f-read);
+  line-height: 1.8;
+}
+.sheet-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sheet-note {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--faint);
+}
+.btn-primary {
+  height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--surface);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

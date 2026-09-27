@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MIN_DELAY_MS, RAMP_TOKENS, remainingMs, tokenDelay } from "./timing";
+import { cumulativeMs, MIN_DELAY_MS, RAMP_TOKENS, remainingMs, tokenDelay } from "./timing";
 import type { Token } from "./types";
 
 const tok = (len: number, extra: Partial<Token> = {}): Token => ({
@@ -45,4 +45,12 @@ it("remainingMs は from 以降の合計", () => {
   const tokens = [tok(2), tok(3), tok(4)];
   expect(remainingMs(tokens, 1, { lang: "ja", speed: 600 })).toBe(700);
   expect(remainingMs(tokens, 3, { lang: "ja", speed: 600 })).toBe(0);
+});
+
+it("cumulativeMs の差は remainingMs と一致する", () => {
+  const tokens = [tok(2), tok(3, { pause: 1 }), tok(4)];
+  const opts = { lang: "ja" as const, speed: 600 };
+  const acc = cumulativeMs(tokens, opts);
+  expect(Array.from(acc)).toEqual([0, 200, 900, 1300]);
+  expect(acc[3]! - acc[1]!).toBe(remainingMs(tokens, 1, opts));
 });
