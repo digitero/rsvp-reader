@@ -1,97 +1,179 @@
-import { useCallback, useState } from "react";
-import { DEFAULT_SPEED, detectLang, normalize, type Lang } from "./core";
+import { useCallback, useEffect, useState } from "react";
+import type { Lang } from "./core";
+import { LibraryView } from "./features/library/LibraryView";
 import { Reader } from "./features/reader/Reader";
+import type { ImportedText } from "./source/importText";
+import { Library, type DocMeta } from "./storage/library";
+import { loadSettings, saveSettings, type Settings } from "./storage/settings";
+import { useHashRoute } from "./useHashRoute";
 import "./styles/global.css";
 import "./App.css";
 
-const SAMPLE = normalize(`文章を速く読むための方法はいくつもある。RSVPはその一つで、画面の同じ場所に言葉を次々と表示していく。目を左右に動かす必要がないため、視線の移動にかかる時間を減らせる。
+type LibraryState =
+  | { status: "loading" }
+  | { status: "ready"; lib: Library; docs: DocMeta[] }
+  | { status: "error" };
 
-ただし、速ければ良いわけではない。内容が頭に残らなければ意味がないからだ。このアプリでは、句読点で少し止まり、長い語はゆっくり見せる。見失ったときは止めれば、前後の文がすぐに表示される。
-
-日本語には単語の間に空白がない。そこでブラウザ標準のIntl.Segmenterで語を切り出し、助詞などを前の語にまとめて「文節」に近いかたまりにしている。`);
-
-interface Doc {
-  title: string;
-  text: string;
-  lang: Lang;
-}
-
-/** M3 でライブラリ画面に置き換えるまでの仮の画面。サンプル文と貼り付けだけを扱う */
 export function App() {
-  const [doc, setDoc] = useState<Doc>({ title: "サンプル：速く読むということ", text: SAMPLE, lang: "ja" });
-  const [speeds, setSpeeds] = useState<Record<Lang, number>>(DEFAULT_SPEED);
-  const [pasting, setPasting] = useState(false);
-  const [draft, setDraft] = useState("");
+  const [state, setState] = useState<LibraryState>({ status: "loading" });
+  const [settings, setSettings] = useState<Settings>(loadSettings);
+  const [route, navigate] = useHashRoute();
 
-  const onSpeedChange = useCallback(
-    (speed: number) => setSpeeds((s) => ({ ...s, [doc.lang]: speed })),
-    [doc.lang],
+  useEffect(() => {
+    let lib: Library | undefined;
+    let cancelled = false;
+    Library.open()
+      .then(async (opened) => {
+        // 開く前にアンマウントされていたら（StrictMode の再実行など）すぐ閉じる
+        if (cancelled) return opened.close();
+        lib = opened;
+        const docs = await opened.list();
+        if (!cancelled) setState({ status: "ready", lib: opened, docs });
+      })
+      .catch(() => {
+        if (!cancelled) setState({ status: "error" });
+      });
+    return () => {
+      cancelled = true;
+      lib?.close();
+    };
+  }, []);
+
+  useEffect(() => saveSettings(settings), [settings]);
+
+  // ライブラリ以外（リーダー画面）にファイルを落としても、ブラウザがそのファイルに移動しないようにする
+  useEffect(() => {
+    const block = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+    };
+    window.addEventListener("dragover", block);
+    window.addEventListener("drop", block);
+    return () => {
+      window.removeEventListener("dragover", block);
+      window.removeEventListener("drop", block);
+    };
+  }, []);
+
+  const lib = state.status === "ready" ? state.lib : null;
+
+  const refresh = useCallback(async () => {
+    if (!lib) return;
+    const docs = await lib.list();
+    setState((s) => (s.status === "ready" ? { ...s, docs } : s));
+  }, [lib]);
+
+  const onAdd = useCallback(
+    async (docs: ImportedText[], open: boolean) => {
+      if (!lib) return;
+      let last: DocMeta | undefined;
+      for (const d of docs) last = await lib.add(d);
+      await refresh();
+      if (open && last) navigate({ name: "read", id: last.id });
+    },
+    [lib, refresh, navigate],
   );
 
-  const load = () => {
-    const text = normalize(draft);
-    if (!text) return;
-    const firstLine = text.split("\n", 1)[0]!;
-    setDoc({
-      title: firstLine.length > 30 ? `${firstLine.slice(0, 30)}…` : firstLine,
-      text,
-      lang: detectLang(text),
-    });
-    setDraft("");
-    setPasting(false);
-  };
+  const onRemove = useCallback(
+    async (id: string) => {
+      await lib?.remove(id);
+      await refresh();
+    },
+    [lib, refresh],
+  );
+
+  const onSpeedChange = useCallback(
+    (lang: Lang, speed: number) => setSettings((s) => ({ ...s, speed: { ...s.speed, [lang]: speed } })),
+    [],
+  );
+
+  if (state.status === "loading") return null;
+  if (state.status === "error") {
+    return (
+      <p className="app-message">
+        文書を保存する領域（IndexedDB）を開けませんでした。プライベートブラウズを解除するか、別のブラウザでお試しください。
+      </p>
+    );
+  }
+
+  if (route.name === "read") {
+    return (
+      <ReaderRoute
+        key={route.id}
+        lib={state.lib}
+        id={route.id}
+        settings={settings}
+        onSpeedChange={onSpeedChange}
+        onSaved={refresh}
+        onClose={() => navigate({ name: "library" })}
+      />
+    );
+  }
 
   return (
-    <>
-      <Reader
-        key={doc.text}
-        title={doc.title}
-        text={doc.text}
-        lang={doc.lang}
-        speed={speeds[doc.lang]}
-        onSpeedChange={onSpeedChange}
-        actions={
-          <button type="button" className="bar-button" onClick={() => setPasting(true)}>
-            文章を貼り付け
-          </button>
-        }
-      />
-      {pasting && (
-        <div className="sheet-backdrop" onClick={() => setPasting(false)}>
-          <form
-            className="sheet"
-            onClick={(e) => e.stopPropagation()}
-            onSubmit={(e) => {
-              e.preventDefault();
-              load();
-            }}
-          >
-            <label htmlFor="paste-text" className="sheet-title">
-              読みたい文章を貼り付け
-            </label>
-            <textarea
-              id="paste-text"
-              autoFocus
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") setPasting(false);
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) load();
-              }}
-              placeholder="日本語または英語の文章"
-            />
-            <div className="sheet-actions">
-              <span className="sheet-note">⌘+Enter で読み始める</span>
-              <button type="button" className="btn-ghost" onClick={() => setPasting(false)}>
-                キャンセル
-              </button>
-              <button type="submit" className="btn-primary" disabled={!draft.trim()}>
-                読み始める
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-    </>
+    <LibraryView
+      docs={state.docs}
+      speed={settings.speed}
+      onAdd={onAdd}
+      onOpen={(id) => navigate({ name: "read", id })}
+      onRemove={(id) => void onRemove(id)}
+    />
+  );
+}
+
+interface ReaderRouteProps {
+  lib: Library;
+  id: string;
+  settings: Settings;
+  onSpeedChange: (lang: Lang, speed: number) => void;
+  onSaved: () => void;
+  onClose: () => void;
+}
+
+function ReaderRoute({ lib, id, settings, onSpeedChange, onSaved, onClose }: ReaderRouteProps) {
+  const [doc, setDoc] = useState<{ meta: DocMeta; text: string } | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    void lib.get(id).then((d) => {
+      if (!cancelled) setDoc(d ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lib, id]);
+
+  const lang = doc?.meta.lang ?? "ja";
+  const onSpeed = useCallback((speed: number) => onSpeedChange(lang, speed), [onSpeedChange, lang]);
+  const onProgress = useCallback(
+    (offset: number, finished: boolean) => {
+      // 画面を閉じる途中で DB が閉じられていても、読書位置の保存失敗で操作を止めない
+      lib.saveProgress(id, offset, finished).then(onSaved, () => {});
+    },
+    [lib, id, onSaved],
+  );
+
+  if (doc === undefined) return null;
+  if (doc === null) {
+    return (
+      <div className="app-message">
+        <p>この文書は見つかりませんでした。削除された可能性があります。</p>
+        <button type="button" className="btn-ghost" onClick={onClose}>
+          ライブラリに戻る
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <Reader
+      title={doc.meta.title}
+      text={doc.text}
+      lang={doc.meta.lang}
+      speed={settings.speed[doc.meta.lang]}
+      onSpeedChange={onSpeed}
+      initialOffset={doc.meta.finished ? 0 : doc.meta.offset}
+      onProgress={onProgress}
+      onClose={onClose}
+    />
   );
 }

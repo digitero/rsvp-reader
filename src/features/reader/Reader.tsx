@@ -17,6 +17,8 @@ import "./reader.css";
 const segmenter = new IntlSegmenter();
 /** これ以上横に動かしたら、タップではなく左右スワイプとみなす */
 const SWIPE_PX = 48;
+/** 再生中に読書位置を保存する間隔 */
+const SAVE_INTERVAL_MS = 5000;
 
 export interface ReaderProps {
   title: string;
@@ -27,8 +29,8 @@ export interface ReaderProps {
   onSpeedChange: (speed: number) => void;
   /** 保存しておいた読書位置（文字オフセット） */
   initialOffset?: number;
-  /** 停止したときに現在の文字オフセットを通知する */
-  onProgress?: (offset: number) => void;
+  /** 停止・読了・画面を離れたとき、および再生中は一定間隔で読書位置を通知する */
+  onProgress?: (offset: number, finished: boolean) => void;
   onClose?: () => void;
   /** 上部バーの右側に置く操作 */
   actions?: ReactNode;
@@ -49,12 +51,37 @@ export function Reader(props: ReaderProps) {
     if (props.initialOffset) player.seekToOffset(props.initialOffset);
   }, [player, tokens]);
 
-  // 停止したら位置を知らせる
-  const wasPlaying = useRef(false);
+  // 読書位置の保存。最新の onProgress を ref 経由で呼び、購読を張り直さない
+  const progressRef = useRef(onProgress);
+  progressRef.current = onProgress;
   useEffect(() => {
-    if (wasPlaying.current && !state.playing) onProgress?.(player.currentOffset());
-    wasPlaying.current = state.playing;
-  }, [state.playing, player, onProgress]);
+    const report = () => {
+      const { finished } = player.getState();
+      progressRef.current?.(player.currentOffset(), finished);
+    };
+    // 開いて閉じただけなら保存しない（読了した文書が 0% に戻ったり、文の途中の位置が文頭に巻き戻ったりしないように）。
+    // 保存位置への初期移動はこの購読より前に済んでいるので数えない
+    let touched = false;
+    const reportIfTouched = () => {
+      if (touched) report();
+    };
+    let wasPlaying = player.getState().playing;
+    const unsubscribe = player.subscribe((s) => {
+      touched = true;
+      if (wasPlaying && !s.playing) report();
+      wasPlaying = s.playing;
+    });
+    const timer = setInterval(() => {
+      if (player.getState().playing) report();
+    }, SAVE_INTERVAL_MS);
+    window.addEventListener("pagehide", reportIfTouched);
+    return () => {
+      unsubscribe();
+      clearInterval(timer);
+      window.removeEventListener("pagehide", reportIfTouched);
+      reportIfTouched();
+    };
+  }, [player]);
 
   // タブが裏に回ったら止める
   useEffect(() => {
@@ -108,6 +135,11 @@ export function Reader(props: ReaderProps) {
   return (
     <div className="reader">
       <header className="reader-bar">
+        {onClose && (
+          <button type="button" className="reader-back" onClick={onClose} title="ライブラリに戻る (Esc)">
+            ← ライブラリ
+          </button>
+        )}
         <span className="reader-title">{props.title}</span>
         <span className="reader-meta">
           {lang} · {tokens.length.toLocaleString()} 語

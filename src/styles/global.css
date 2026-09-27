@@ -11,6 +11,8 @@
   --focus: #d93a2b;
   --accent: #2f47a8;
   --accent-soft: #e3e8f8;
+  --danger: #b4232a;
+  --error: #b4232a;
 
   --f-body: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
   --f-read: "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
@@ -33,6 +35,8 @@
     --focus: #ff6b5a;
     --accent: #8fa3f2;
     --accent-soft: #232c4a;
+    --danger: #c9363d;
+    --error: #ff7b72;
     color-scheme: dark;
   }
 }
@@ -73,4 +77,47 @@ textarea {
 
 [hidden] {
   display: none !important;
+}
+
+.btn-ghost,
+.btn-primary,
+.btn-danger {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-ghost {
+  border: 1px solid var(--line);
+  background: transparent;
+}
+.btn-ghost:hover {
+  background: var(--sunken);
+}
+.btn-primary {
+  border: 0;
+  background: var(--accent);
+  color: var(--surface);
+  font-weight: 500;
+}
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.btn-danger {
+  border: 0;
+  background: var(--danger);
+  color: #fff;
+  font-weight: 500;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
