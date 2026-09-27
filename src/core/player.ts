@@ -48,6 +48,10 @@ export class Player {
     return this.state;
   }
 
+  getTokens(): readonly Token[] {
+    return this.tokens;
+  }
+
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);

@@ -111,6 +111,9 @@ test("スマホ幅で横にはみ出さず、強調文字が中心線に揃う",
   expect(offsets.length).toBeGreaterThan(5);
   expect(Math.max(...offsets)).toBeLessThan(1.5);
   expect(await overflow()).toBe(0);
+  // 操作ボタン（一文戻る・再生・一文進む・＋しおり）が1行に収まる
+  const tops = await page.locator(".buttons > button").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2)));
+  expect(new Set(tops).size).toBe(1);
 
   await page.getByRole("button", { name: "表示設定" }).click();
   const wordBottom = await page.locator(".word").evaluate((e) => e.getBoundingClientRect().bottom);
@@ -135,4 +138,36 @@ test("PWA: Service Worker が登録され、オフラインでも開ける", asy
   await page.getByRole("button", { name: "サンプルを読む" }).click();
   await expect(page.locator(".reader")).toBeVisible();
   await context.setOffline(false);
+});
+
+test("しおりを挟み、一覧から戻れる", async ({ page }) => {
+  await openSample(page);
+  await page.getByRole("button", { name: /一文進む/ }).click();
+  const sentenceHead = await page.locator(".ctx-token.is-current").textContent();
+  await page.getByRole("button", { name: "＋しおり" }).click();
+  await expect(page.locator(".reader-toast")).toHaveText("しおりを挟みました");
+
+  await page.getByRole("button", { name: /一文進む/ }).click();
+  await page.getByRole("button", { name: /一文進む/ }).click();
+  await page.getByRole("button", { name: "しおり", exact: true }).click();
+  await expect(page.locator(".bookmark-open")).toHaveCount(1);
+  await page.locator(".bookmark-open").click();
+  await expect(page.locator(".ctx-token.is-current")).toHaveText(sentenceHead!);
+
+  // 再読み込みしても残る
+  await page.reload();
+  await page.getByRole("button", { name: "しおり", exact: true }).click();
+  await expect(page.locator(".bookmark-open")).toHaveCount(1);
+});
+
+test("読んだ量が「読書の記録」に出る", async ({ page }) => {
+  await openSample(page);
+  await page.locator(".btn-play").click();
+  await page.waitForTimeout(3000);
+  await page.locator(".btn-play").click();
+  await page.locator(".reader-back").click();
+  await expect(page.locator(".stats")).toBeVisible();
+  const today = await page.locator(".stats-figures dd").first().textContent();
+  expect(Number(today!.replace(/[^\d]/g, ""))).toBeGreaterThan(5);
+  await expect(page.locator(".stats-figures")).toContainText("連続1日");
 });

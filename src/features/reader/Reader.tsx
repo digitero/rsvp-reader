@@ -3,18 +3,21 @@ import {
   cumulativeMs,
   groupTokens,
   indexAtOffset,
+  sentenceStart,
   SPEED_RANGE,
   type Lang,
   type TimingOptions,
   type Token,
 } from "../../core";
 import type { Heading } from "../../source/headings";
+import type { Bookmark } from "../../storage/library";
 import type { Settings } from "../../storage/settings";
 import { ContextView } from "./ContextView";
 import { Controls } from "./Controls";
 import { usePlayer } from "./usePlayer";
 import { TocSheet } from "./TocSheet";
 import { useReaderKeys } from "./useReaderKeys";
+import { useReadingStats } from "./useReadingStats";
 import { WordDisplay } from "./WordDisplay";
 import "./reader.css";
 
@@ -32,8 +35,14 @@ export interface ReaderProps {
   lang: Lang;
   /** 本文を分割したトークン（表示単位でまとめる前） */
   baseTokens: readonly Token[];
-  /** 目次。空なら目次ボタンを出さない */
+  /** 目次 */
   headings?: readonly Heading[];
+  bookmarks?: readonly Bookmark[];
+  /** 現在の文の先頭にしおりを挟む */
+  onAddBookmark?: (offset: number) => void;
+  onRemoveBookmark?: (id: string) => void;
+  /** 再生中に実際に読んだ時間と量（日本語は文字数、英語は語数）を通知する */
+  onReading?: (ms: number, units: number) => void;
   speed: number;
   onSpeedChange: (speed: number) => void;
   /** 保存しておいた読書位置（文字オフセット） */
@@ -53,7 +62,10 @@ export interface ReaderProps {
 export function Reader(props: ReaderProps) {
   const { text, lang, speed, onSpeedChange, onProgress, onClose, display, baseTokens } = props;
   const headings = props.headings ?? [];
-  const [tocOpen, setTocOpen] = useState(false);
+  const bookmarks = props.bookmarks ?? [];
+  const [nav, setNav] = useState<null | "toc" | "bookmarks">(null);
+  const tocOpen = nav !== null;
+  const [toast, setToast] = useState<string | null>(null);
   // 設定や目次のシートが開いている間は、再生を止めてリーダーのキー操作を受け付けない
   const settingsOpen = props.settingsOpen ?? false;
   const sheetOpen = settingsOpen || tocOpen;
@@ -77,7 +89,26 @@ export function Reader(props: ReaderProps) {
     if (sheetOpen) player.pause();
   }, [sheetOpen, player]);
 
-  const closeToc = useCallback(() => setTocOpen(false), []);
+  const closeToc = useCallback(() => setNav(null), []);
+
+  useReadingStats(player, text, lang, props.onReading);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 1600);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const { onAddBookmark } = props;
+  const addBookmark = useCallback(() => {
+    if (!onAddBookmark) return;
+    const toks = player.getTokens();
+    const i = sentenceStart(toks, player.getState().index);
+    const token = toks[i];
+    if (!token) return;
+    onAddBookmark(token.start);
+    setToast("しおりを挟みました");
+  }, [onAddBookmark, player]);
   const currentOffset = tokens[state.index]?.start ?? 0;
   let chapter = -1;
   for (let i = 0; i < headings.length && headings[i]!.offset <= currentOffset; i++) chapter = i;
@@ -161,8 +192,9 @@ export function Reader(props: ReaderProps) {
       faster: () => onSpeedChange(Math.min(speed + range.step, range.max)),
       slower: () => onSpeedChange(Math.max(speed - range.step, range.min)),
       close: onClose,
+      bookmark: addBookmark,
     }),
-    [player, speed, range, onSpeedChange, onClose],
+    [player, speed, range, onSpeedChange, onClose, addBookmark],
   );
   useReaderKeys(keyHandlers, !sheetOpen);
 
@@ -208,9 +240,13 @@ export function Reader(props: ReaderProps) {
         <span className="reader-meta">
           {lang} · {tokens.length.toLocaleString()} 語
         </span>
-        {headings.length > 0 && (
-          <button type="button" className="bar-button" onClick={() => setTocOpen(true)}>
-            目次
+        {(headings.length > 0 || bookmarks.length > 0) && (
+          <button
+            type="button"
+            className="bar-button"
+            onClick={() => setNav(headings.length > 0 ? "toc" : "bookmarks")}
+          >
+            {headings.length > 0 ? "目次" : "しおり"}
           </button>
         )}
         {props.onOpenSettings && (
@@ -231,6 +267,11 @@ export function Reader(props: ReaderProps) {
         <div className="guide guide-top" />
         <div className="guide guide-bottom" />
         <WordDisplay text={text} token={tokens[state.index]} />
+        {toast && (
+          <div className="reader-toast" role="status">
+            {toast}
+          </div>
+        )}
         {showContext && (
           <ContextView
             text={text}
@@ -258,15 +299,20 @@ export function Reader(props: ReaderProps) {
         onSeek={(i) => player.seek(i)}
         onSpeed={setSpeed}
         chapter={chapter >= 0 ? headings[chapter]!.title : undefined}
+        onBookmark={props.onAddBookmark ? addBookmark : undefined}
       />
-      {tocOpen && (
+      {nav && (
         <TocSheet
+          text={text}
           headings={headings}
+          bookmarks={bookmarks}
           current={chapter}
-          onPick={(h) => {
-            player.seek(indexAtOffset(tokens, h.offset));
-            setTocOpen(false);
+          initialTab={nav}
+          onPickOffset={(offset) => {
+            player.seek(indexAtOffset(tokens, offset));
+            setNav(null);
           }}
+          onRemoveBookmark={(id) => props.onRemoveBookmark?.(id)}
           onClose={closeToc}
         />
       )}

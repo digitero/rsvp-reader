@@ -2,6 +2,7 @@ import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { Lang } from "../core";
 import type { Heading } from "../source/headings";
 import type { ImportedText, SourceKind } from "../source/importText";
+import { addToDay, dateKey, emptyDay, type DailyStats } from "./stats";
 
 /** ライブラリ一覧に出す情報。本文は大きいので別のストアに置く */
 export interface DocMeta {
@@ -20,11 +21,21 @@ export interface DocMeta {
   finished: boolean;
   /** 目次。M5 より前に追加した文書には無い */
   headings?: Heading[];
+  /** しおり（本文の位置の昇順） */
+  bookmarks?: Bookmark[];
+}
+
+export interface Bookmark {
+  id: string;
+  /** しおりを挟んだ文の先頭の文字オフセット */
+  offset: number;
+  createdAt: number;
 }
 
 interface Schema extends DBSchema {
   docs: { key: string; value: DocMeta };
   texts: { key: string; value: string };
+  stats: { key: string; value: DailyStats };
 }
 
 const DB_NAME = "rsvp-reader";
@@ -32,13 +43,29 @@ const DB_NAME = "rsvp-reader";
 export class Library {
   private constructor(private readonly db: IDBPDatabase<Schema>) {}
 
-  static async open(name = DB_NAME): Promise<Library> {
-    const db = await openDB<Schema>(name, 1, {
-      upgrade(db) {
-        db.createObjectStore("docs", { keyPath: "id" });
-        db.createObjectStore("texts");
+  /**
+   * @param onBlocked 古い版のアプリが別のタブなどで開いたままで、データベースを更新できないときに呼ぶ。
+   *   そのタブが閉じられると、開く処理はそのまま続く。
+   */
+  static async open(name = DB_NAME, onBlocked?: () => void): Promise<Library> {
+    let opened: IDBPDatabase<Schema> | undefined;
+    const db = await openDB<Schema>(name, 2, {
+      blocked() {
+        onBlocked?.();
+      },
+      // 新しい版が別のタブで開かれたら、こちらの接続を閉じて更新を妨げない
+      blocking() {
+        opened?.close();
+      },
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          db.createObjectStore("docs", { keyPath: "id" });
+          db.createObjectStore("texts");
+        }
+        if (oldVersion < 2) db.createObjectStore("stats", { keyPath: "date" });
       },
     });
+    opened = db;
     return new Library(db);
   }
 
@@ -84,6 +111,47 @@ export class Library {
     const meta = await tx.store.get(id);
     if (!meta) return undefined;
     const next = { ...meta, offset, finished, lastReadAt: now };
+    await tx.store.put(next);
+    await tx.done;
+    return next;
+  }
+
+  /** しおりを追加する。同じ位置にすでにあれば何もしない */
+  async addBookmark(id: string, offset: number, now = Date.now()): Promise<DocMeta | undefined> {
+    return this.updateDoc(id, (meta) => {
+      const bookmarks = meta.bookmarks ?? [];
+      if (bookmarks.some((b) => b.offset === offset)) return meta;
+      const next = [...bookmarks, { id: newId(), offset, createdAt: now }].sort((a, b) => a.offset - b.offset);
+      return { ...meta, bookmarks: next };
+    });
+  }
+
+  async removeBookmark(id: string, bookmarkId: string): Promise<DocMeta | undefined> {
+    return this.updateDoc(id, (meta) => ({
+      ...meta,
+      bookmarks: (meta.bookmarks ?? []).filter((b) => b.id !== bookmarkId),
+    }));
+  }
+
+  /** 読んだ時間と量を、その日の記録に足す */
+  async addReading(lang: Lang, ms: number, units: number, now = new Date()): Promise<void> {
+    if (ms <= 0 && units <= 0) return;
+    const tx = this.db.transaction("stats", "readwrite");
+    const key = dateKey(now);
+    const day = (await tx.store.get(key)) ?? emptyDay(key);
+    await tx.store.put(addToDay(day, lang, ms, units));
+    await tx.done;
+  }
+
+  async listStats(): Promise<DailyStats[]> {
+    return this.db.getAll("stats");
+  }
+
+  private async updateDoc(id: string, fn: (meta: DocMeta) => DocMeta): Promise<DocMeta | undefined> {
+    const tx = this.db.transaction("docs", "readwrite");
+    const meta = await tx.store.get(id);
+    if (!meta) return undefined;
+    const next = fn(meta);
     await tx.store.put(next);
     await tx.done;
     return next;

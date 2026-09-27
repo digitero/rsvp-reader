@@ -17,6 +17,13 @@ export const SPEED_RANGE: Record<Lang, { min: number; max: number; step: number 
 /** 再生開始から何トークンかけて設定速度に戻すか */
 export const RAMP_TOKENS = 8;
 const RAMP_EXTRA = 0.6;
+/**
+ * 日本語のかたまりの表示時間 = (JA_FIXED + JA_PER_CHAR × 文字数) 文字ぶん。
+ * 文字数にそのまま比例させると、1〜2文字のかたまりが続く所は速すぎて追えず、
+ * 長いかたまりは遅く感じる。平均的な4文字では比例と同じ長さ（4文字ぶん）になるように決めている。
+ */
+const JA_FIXED = 2.4;
+const JA_PER_CHAR = 0.4;
 /** 1回の停止を何単位ぶんにするか */
 const PAUSE_UNITS: Record<Lang, number> = { ja: 4, en: 2 };
 export const MIN_DELAY_MS = 120;
@@ -28,7 +35,7 @@ export const MIN_DELAY_MS = 120;
 export function tokenDelay(token: Token, opts: TimingOptions, rampLeft = 0): number {
   const unit = 60000 / opts.speed;
   const len = token.end - token.start;
-  const base = opts.lang === "ja" ? unit * Math.max(len, 2) : unit * (0.8 + 0.04 * len);
+  const base = opts.lang === "ja" ? unit * (JA_FIXED + JA_PER_CHAR * len) : unit * (0.8 + 0.04 * len);
   const pause = unit * PAUSE_UNITS[opts.lang] * token.pause * (opts.pauseScale ?? 1);
   const ramp = 1 + RAMP_EXTRA * (Math.min(Math.max(rampLeft, 0), RAMP_TOKENS) / RAMP_TOKENS);
   return Math.max((base + pause) * token.weight * ramp, MIN_DELAY_MS);

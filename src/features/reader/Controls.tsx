@@ -15,6 +15,7 @@ interface Props {
   onSpeed: (speed: number) => void;
   /** いま読んでいる章の見出し */
   chapter?: string;
+  onBookmark?: () => void;
 }
 
 export function Controls(p: Props) {
@@ -58,6 +59,11 @@ export function Controls(p: Props) {
         <button type="button" className="btn-ghost" onClick={p.onNext} title="一文進む (→)">
           一文進む ▶
         </button>
+        {p.onBookmark && (
+          <button type="button" className="btn-ghost" onClick={p.onBookmark} title="いまの文にしおりを挟む (B)">
+            ＋しおり
+          </button>
+        )}
         <label className="speed" htmlFor="reader-speed">
           速度
           <input

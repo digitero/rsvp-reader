@@ -7,14 +7,16 @@ import { SettingsSheet } from "./features/settings/SettingsSheet";
 import type { ImportedText } from "./source/importText";
 import { Library, type DocMeta } from "./storage/library";
 import { loadSettings, saveSettings, type Settings } from "./storage/settings";
+import type { DailyStats } from "./storage/stats";
 import { useHashRoute } from "./useHashRoute";
 import "./styles/global.css";
 import "./App.css";
 
 type LibraryState =
   | { status: "loading" }
-  | { status: "ready"; lib: Library; docs: DocMeta[] }
-  | { status: "error" };
+  | { status: "ready"; lib: Library; docs: DocMeta[]; stats: DailyStats[] }
+  | { status: "error" }
+  | { status: "blocked" };
 
 export function App() {
   const [state, setState] = useState<LibraryState>({ status: "loading" });
@@ -26,13 +28,15 @@ export function App() {
   useEffect(() => {
     let lib: Library | undefined;
     let cancelled = false;
-    Library.open()
+    Library.open(undefined, () => {
+      if (!cancelled) setState({ status: "blocked" });
+    })
       .then(async (opened) => {
         // 開く前にアンマウントされていたら（StrictMode の再実行など）すぐ閉じる
         if (cancelled) return opened.close();
         lib = opened;
-        const docs = await opened.list();
-        if (!cancelled) setState({ status: "ready", lib: opened, docs });
+        const [docs, stats] = await Promise.all([opened.list(), opened.listStats()]);
+        if (!cancelled) setState({ status: "ready", lib: opened, docs, stats });
       })
       .catch(() => {
         if (!cancelled) setState({ status: "error" });
@@ -73,8 +77,8 @@ export function App() {
 
   const refresh = useCallback(async () => {
     if (!lib) return;
-    const docs = await lib.list();
-    setState((s) => (s.status === "ready" ? { ...s, docs } : s));
+    const [docs, stats] = await Promise.all([lib.list(), lib.listStats()]);
+    setState((s) => (s.status === "ready" ? { ...s, docs, stats } : s));
   }, [lib]);
 
   const onAdd = useCallback(
@@ -102,6 +106,13 @@ export function App() {
   );
 
   if (state.status === "loading") return null;
+  if (state.status === "blocked") {
+    return (
+      <p className="app-message" role="alert">
+        アプリを更新しています。別のタブやホーム画面から開いている RSVP Reader があれば、閉じてください。閉じると自動で続きます。
+      </p>
+    );
+  }
   if (state.status === "error") {
     return (
       <p className="app-message">
@@ -143,6 +154,7 @@ export function App() {
     <>
       <LibraryView
         docs={state.docs}
+        stats={state.stats}
         speed={settings.speed}
         onAdd={onAdd}
         onOpen={(id) => navigate({ name: "read", id })}
@@ -169,6 +181,7 @@ interface ReaderRouteProps {
 function ReaderRoute(props: ReaderRouteProps) {
   const { lib, id, settings, onSpeedChange, onSaved, onClose, onLang } = props;
   const [doc, setDoc] = useState<{ meta: DocMeta; text: string; tokens: Token[] } | null | undefined>(undefined);
+  const [bookmarks, setBookmarks] = useState<DocMeta["bookmarks"]>([]);
 
   // 本文を読み出して分割する。長文は Worker で分割するので、その間は準備中を表示する
   useEffect(() => {
@@ -180,7 +193,10 @@ function ReaderRoute(props: ReaderRouteProps) {
         return;
       }
       const tokens = await segmentAsync(d.text, d.meta.lang, DEFAULT_CHUNK_MAX);
-      if (!cancelled) setDoc({ ...d, tokens });
+      if (!cancelled) {
+        setDoc({ ...d, tokens });
+        setBookmarks(d.meta.bookmarks ?? []);
+      }
     })();
     return () => {
       cancelled = true;
@@ -196,6 +212,25 @@ function ReaderRoute(props: ReaderRouteProps) {
       lib.saveProgress(id, offset, finished).then(onSaved, () => {});
     },
     [lib, id, onSaved],
+  );
+
+  const onAddBookmark = useCallback(
+    (offset: number) => {
+      lib.addBookmark(id, offset).then((m) => m && setBookmarks(m.bookmarks ?? []), () => {});
+    },
+    [lib, id],
+  );
+  const onRemoveBookmark = useCallback(
+    (bookmarkId: string) => {
+      lib.removeBookmark(id, bookmarkId).then((m) => m && setBookmarks(m.bookmarks ?? []), () => {});
+    },
+    [lib, id],
+  );
+  const onReading = useCallback(
+    (ms: number, units: number) => {
+      lib.addReading(lang, ms, units).then(onSaved, () => {});
+    },
+    [lib, lang, onSaved],
   );
 
   if (doc === undefined) return <p className="app-message">準備しています…</p>;
@@ -217,6 +252,10 @@ function ReaderRoute(props: ReaderRouteProps) {
       lang={doc.meta.lang}
       baseTokens={doc.tokens}
       headings={doc.meta.headings}
+      bookmarks={bookmarks}
+      onAddBookmark={onAddBookmark}
+      onRemoveBookmark={onRemoveBookmark}
+      onReading={onReading}
       speed={settings.speed[doc.meta.lang]}
       onSpeedChange={onSpeed}
       initialOffset={doc.meta.finished ? 0 : doc.meta.offset}

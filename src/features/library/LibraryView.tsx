@@ -3,10 +3,13 @@ import type { Lang } from "../../core";
 import { SAMPLE } from "../../sample";
 import { ACCEPTED_FILES, fromFile, fromPaste, ImportError, type ImportedText } from "../../source/importText";
 import { estimateMinutesLeft, progressRatio, type DocMeta } from "../../storage/library";
+import type { DailyStats } from "../../storage/stats";
+import { StatsPanel } from "./StatsPanel";
 import "./library.css";
 
 interface Props {
   docs: DocMeta[];
+  stats: DailyStats[];
   speed: Record<Lang, number>;
   onAdd: (docs: ImportedText[], open: boolean) => Promise<void>;
   onOpen: (id: string) => void;
@@ -16,7 +19,7 @@ interface Props {
 
 const dateFormat = new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric" });
 
-export function LibraryView({ docs, speed, onAdd, onOpen, onRemove, onOpenSettings }: Props) {
+export function LibraryView({ docs, stats, speed, onAdd, onOpen, onRemove, onOpenSettings }: Props) {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -170,6 +173,9 @@ export function LibraryView({ docs, speed, onAdd, onOpen, onRemove, onOpenSettin
           </ul>
         )}
       </section>
+
+      {/* 一覧を先に見せたいので、記録はその下に置く */}
+      <StatsPanel stats={stats} />
 
       {dragging && (
         <div className="drop-overlay" aria-hidden="true">

@@ -7,10 +7,11 @@ export interface ReaderKeyHandlers {
   faster: () => void;
   slower: () => void;
   close?: () => void;
+  bookmark?: () => void;
 }
 
 /**
- * Space: 再生/停止、←→: 一文戻る/進む、↑↓: 速度、Esc: 閉じる。
+ * Space: 再生/停止、←→: 一文戻る/進む、↑↓: 速度、B: しおり、Esc: 閉じる。
  * 文字入力中や、フォーカスしたスライダーが自分で処理する矢印キーには反応しない。
  */
 export function useReaderKeys(handlers: ReaderKeyHandlers, enabled = true): void {
@@ -50,6 +51,11 @@ export function useReaderKeys(handlers: ReaderKeyHandlers, enabled = true): void
           if (onRange) return;
           e.preventDefault();
           handlers.slower();
+          break;
+        case "b":
+        case "B":
+          if (onRange) return;
+          handlers.bookmark?.();
           break;
         case "Escape":
           handlers.close?.();
